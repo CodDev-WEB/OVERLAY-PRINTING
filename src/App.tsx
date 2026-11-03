@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import * as pdfjsLib from 'pdfjs-dist'
 import { AlignLeft, FileDown, FileUp, MousePointer2, Plus, Printer, Settings2, Trash2 } from 'lucide-react'
@@ -83,7 +83,7 @@ export default function App() {
     setSelectedId(null)
   }
 
-  const addFieldAt = (event: React.MouseEvent<HTMLDivElement>) => {
+  const addFieldAt = (event: MouseEvent<HTMLDivElement>) => {
     if (!pageRef.current || !templateFile) return
     const bounds = pageRef.current.getBoundingClientRect()
     const x = Math.max(0, Math.min(0.96, (event.clientX - bounds.left) / bounds.width))
