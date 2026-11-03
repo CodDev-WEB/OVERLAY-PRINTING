@@ -28,6 +28,7 @@ export default function App() {
   const [pageSize, setPageSize] = useState({ width: 595.28, height: 841.89 })
   const [renderScale, setRenderScale] = useState(1)
   const [busy, setBusy] = useState(false)
+  const [outputMode, setOutputMode] = useState<'overlay' | 'proof'>('overlay')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
   const selected = fields.find((field) => field.id === selectedId) ?? null
@@ -100,19 +101,29 @@ export default function App() {
     if (!templateFile || !templateKind) return
     setBusy(true)
     try {
-      const bytes = await templateFile.arrayBuffer()
+      const sourceBytes = await templateFile.arrayBuffer()
       let pdf: PDFDocument
       if (templateKind === 'pdf') {
-        pdf = await PDFDocument.load(bytes)
+        if (outputMode === 'proof') {
+          pdf = await PDFDocument.load(sourceBytes)
+        } else {
+          const source = await PDFDocument.load(sourceBytes)
+          const firstPage = source.getPages()[0]
+          const { width, height } = firstPage.getSize()
+          pdf = await PDFDocument.create()
+          pdf.addPage([width, height])
+        }
       } else {
         pdf = await PDFDocument.create()
-        const image = templateKind === 'image'
-          ? (templateFile.type === 'image/png' ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes))
-          : null
-        if (!image) throw new Error('Imagem não suportada.')
+        const image = templateFile.type === 'image/png'
+          ? await pdf.embedPng(sourceBytes)
+          : await pdf.embedJpg(sourceBytes)
         const page = pdf.addPage([image.width, image.height])
-        page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+        if (outputMode === 'proof') {
+          page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+        }
       }
+
       const page = pdf.getPages()[0]
       const { width, height } = page.getSize()
       const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -128,29 +139,18 @@ export default function App() {
           maxWidth: (field.width / 100) * width,
         })
       }
+
       const output = await pdf.save()
       const blob = new Blob([output], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${templateFile.name.replace(/\.[^.]+$/, '')}-overlay.pdf`
+      anchor.download = `${templateFile.name.replace(/\\.[^.]+$/, '')}-${outputMode === 'overlay' ? 'overlay-transparente' : 'prova-completa'}.pdf`
       anchor.click()
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (error) {
       console.error(error)
       alert('Não foi possível gerar o PDF. Verifique o arquivo e tente novamente.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const printOverlay = async () => {
-    if (!templateFile || !templateKind) return
-    setBusy(true)
-    try {
-      // A saída contém o formulário-base e os dados sobrepostos. Para papel pré-impresso,
-      // use "Baixar overlay" e imprima somente a camada de dados; esta ação é para prova.
-      await generateOverlay()
     } finally {
       setBusy(false)
     }
@@ -225,10 +225,10 @@ export default function App() {
           ) : (
             <div className="properties-empty"><MousePointer2 size={22} /><strong>Nenhum campo selecionado</strong><span>Selecione um campo na ficha ou na lista para editar seu conteúdo e aparência.</span></div>
           )}
-          <div className="print-card"><Printer size={18} /><strong>Impressão alinhada</strong><p>Use o PDF gerado para conferir o posicionamento. A impressão final deve ser feita em escala 100%, sem “ajustar à página”.</p><button className="button dark" onClick={printOverlay} disabled={!templateFile || busy}><Printer size={15} /> Gerar arquivo para impressão</button></div>
+          <div className="print-card"><Printer size={18} /><strong>Modo de saída</strong><p>Para papel já pré-impresso, escolha somente os dados. Para testar o alinhamento na tela, gere a prova completa.</p><div className="mode-switch"><button className={outputMode === 'overlay' ? 'mode-option active' : 'mode-option'} onClick={() => setOutputMode('overlay')}>Só dados</button><button className={outputMode === 'proof' ? 'mode-option active' : 'mode-option'} onClick={() => setOutputMode('proof')}>Prova completa</button></div><button className="button dark" onClick={generateOverlay} disabled={!templateFile || busy}><Printer size={15} /> {busy ? 'Gerando...' : 'Gerar PDF para impressão'}</button></div>
         </aside>
       </section>
-      <footer className="footer"><span>OVERLAY PRINTING <b>·</b> MVP 0.1</span><span>Os arquivos permanecem no seu dispositivo.</span></footer>
+      <footer className="footer"><span>OVERLAY PRINTING <b>·</b> MVP 0.2</span><span>Os arquivos permanecem no seu dispositivo.</span></footer>
     </main>
   )
 }
