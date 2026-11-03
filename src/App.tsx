@@ -31,6 +31,7 @@ export default function App() {
   const [outputMode, setOutputMode] = useState<'overlay' | 'proof'>('overlay')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
+  const draggingId = useRef<string | null>(null)
   const selected = fields.find((field) => field.id === selectedId) ?? null
 
   const selectedIndex = useMemo(() => fields.findIndex((field) => field.id === selectedId), [fields, selectedId])
@@ -91,6 +92,14 @@ export default function App() {
     const field = newField(x, y)
     setFields((current) => [...current, field])
     setSelectedId(field.id)
+  }
+
+  const moveField = (event: MouseEvent<HTMLDivElement>) => {
+    if (!draggingId.current || !pageRef.current) return
+    const bounds = pageRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(0.96, (event.clientX - bounds.left) / bounds.width))
+    const y = Math.max(0, Math.min(0.98, (event.clientY - bounds.top) / bounds.height))
+    updateField(draggingId.current, { x, y })
   }
 
   const updateField = (id: string, patch: Partial<OverlayField>) => {
@@ -201,9 +210,9 @@ export default function App() {
             <div className="blank-state"><div className="blank-icon"><AlignLeft size={34} /></div><h2>Sua ficha começa aqui</h2><p>Carregue o formulário original para começar a posicionar os dados que serão impressos.</p><label className="button primary"><FileUp size={16} /> Selecionar ficha<input type="file" accept="application/pdf,image/png,image/jpeg" hidden onChange={(event) => handleTemplate(event.target.files?.[0])} /></label></div>
           ) : (
             <div className="paper-stage">
-              <div className="paper" ref={pageRef} style={pageStyle} onClick={addFieldAt}>
+              <div className="paper" ref={pageRef} style={pageStyle} onClick={addFieldAt} onPointerMove={moveField} onPointerUp={() => { draggingId.current = null }} onPointerCancel={() => { draggingId.current = null }}>
                 {templateKind === 'pdf' ? <canvas ref={canvasRef} className="template-canvas" /> : <img src={imageUrl} className="template-image" alt="Ficha base" />}
-                {fields.map((field) => <div key={field.id} className={field.id === selectedId ? 'overlay-field selected' : 'overlay-field'} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, fontSize: `${Math.max(8, field.fontSize * renderScale)}px`, maxWidth: `${field.width}%` }} onClick={(event) => { event.stopPropagation(); setSelectedId(field.id) }}>{field.value || field.label}</div>)}
+                {fields.map((field) => <div key={field.id} className={field.id === selectedId ? 'overlay-field selected' : 'overlay-field'} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, fontSize: `${Math.max(8, field.fontSize * renderScale)}px`, maxWidth: `${field.width}%` }} onPointerDown={(event) => { event.stopPropagation(); draggingId.current = field.id; setSelectedId(field.id); event.currentTarget.setPointerCapture(event.pointerId) }} onClick={(event) => { event.stopPropagation(); setSelectedId(field.id) }}>{field.value || field.label}</div>)}
               </div>
               <p className="canvas-tip"><MousePointer2 size={14} /> Clique em qualquer ponto da ficha para adicionar um campo. Arraste os campos para ajustar a posição.</p>
             </div>
